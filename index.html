@@ -4,24 +4,18 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>MyFlix</title>
-
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 
 <style>
 
 body{
   margin:0;
-  background:#000;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100vh;
+  background:black;
 }
 
 video{
   width:100%;
-  max-width:1000px;
+  height:100vh;
   background:black;
 }
 
@@ -31,51 +25,34 @@ video{
 
 <body>
 
-<video id="video" controls playsinline></video>
+<video id="video" controls></video>
 
 <script>
 
-const video = document.getElementById("video");
+const video = document.getElementById('video');
 
-const videoSrc =
-"https://huggingface.co/datasets/sunnymavale/myflix-videos/resolve/main/movie2/master.m3u8";
+const src =
+'https://huggingface.co/datasets/sunnymavale/myflix-videos/resolve/main/movie2/master.m3u8';
 
-if (Hls.isSupported()) {
+if(video.canPlayType('application/vnd.apple.mpegurl')){
 
-    const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false
-    });
+  video.src = src;
 
-    hls.loadSource(videoSrc);
+}else if(Hls.isSupported()){
 
-    hls.attachMedia(video);
+  const hls = new Hls();
 
-    hls.on(Hls.Events.MANIFEST_PARSED, function () {
+  hls.loadSource(src);
 
-        console.log("Loaded");
+  hls.attachMedia(video);
 
-        video.play();
+  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      console.log("READY");
+  });
 
-    });
-
-    hls.on(Hls.Events.ERROR, function(event, data) {
-
-        console.log("HLS Error:", data);
-
-    });
-
-}
-
-else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-
-    video.src = videoSrc;
-
-    video.addEventListener('loadedmetadata', function() {
-
-        video.play();
-
-    });
+  hls.on(Hls.Events.ERROR, (event, data) => {
+      console.log(data);
+  });
 
 }
 
