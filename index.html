@@ -1,55 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>My Stream</title>
 
-  <style>
-    body{
-      background:#111;
-      color:white;
-      font-family:sans-serif;
-      text-align:center;
-    }
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
-    .card{
-      width:300px;
-      margin:auto;
-      background:#222;
-      padding:15px;
-      border-radius:12px;
-    }
-
-    video{
-      width:100%;
-      border-radius:10px;
-    }
-
-    button{
-      padding:10px;
-      border:none;
-      border-radius:8px;
-      background:#ff4444;
-      color:white;
-      cursor:pointer;
-    }
-  </style>
 </head>
 
-<body>
+<body style="background:black;">
 
-<h1>My Streaming Site</h1>
+<video id="video" controls width="100%"></video>
 
-<div class="card">
+<script>
 
-<video controls>
-  <source src="YOUR_VIDEO_LINK.mp4" type="video/mp4">
-</video>
+var video = document.getElementById("video");
 
-<h3>Demo Video</h3>
+var hls = new Hls();
 
-<button>Watch Now</button>
+hls.loadSource("YOUR_M3U8_URL");
 
-</div>
+hls.attachMedia(video);
+
+</script>
 
 </body>
 </html>
