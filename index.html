@@ -11,13 +11,17 @@
 <style>
 
 body{
-  background:#111;
   margin:0;
+  background:#000;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
 }
 
 video{
   width:100%;
-  height:100vh;
+  max-width:1000px;
   background:black;
 }
 
@@ -27,21 +31,52 @@ video{
 
 <body>
 
-<video id="video" controls autoplay></video>
+<video id="video" controls playsinline></video>
 
 <script>
 
 const video = document.getElementById("video");
 
-if(Hls.isSupported()){
+const videoSrc =
+"https://huggingface.co/datasets/sunnymavale/myflix-videos/resolve/main/movie2/master.m3u8";
 
-  const hls = new Hls();
+if (Hls.isSupported()) {
 
-  hls.loadSource(
-    "https://huggingface.co/datasets/sunnymavale/myflix-videos/resolve/main/movie2/master.m3u8"
-  );
+    const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false
+    });
 
-  hls.attachMedia(video);
+    hls.loadSource(videoSrc);
+
+    hls.attachMedia(video);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, function () {
+
+        console.log("Loaded");
+
+        video.play();
+
+    });
+
+    hls.on(Hls.Events.ERROR, function(event, data) {
+
+        console.log("HLS Error:", data);
+
+    });
+
+}
+
+else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+
+    video.src = videoSrc;
+
+    video.addEventListener('loadedmetadata', function() {
+
+        video.play();
+
+    });
+
 }
 
 </script>
