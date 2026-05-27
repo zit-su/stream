@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Video - YouTube Clone</title>
+    <title>Myflix - Upload Video </title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background: #0f0f0f; color: white; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -15,6 +15,7 @@
         .progress { height: 8px; background: #333; border-radius: 4px; margin-top: 20px; }
         .progress-bar { background: #ff0000; border-radius: 4px; }
         .preview-video { width: 100%; border-radius: 8px; margin-bottom: 20px; max-height: 300px; }
+        .thumbnail-preview { width: 160px; height: 90px; object-fit: cover; border-radius: 8px; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
@@ -24,18 +25,18 @@
             <div class="file-upload-area" id="dropZone" onclick="document.getElementById('videoFile').click()">
                 <i class="bi bi-camera-video" style="font-size: 48px; color: #666;"></i>
                 <p class="mt-2 mb-0">Click or drag video here</p>
-                <small class="text-muted">MP4, WebM, MOV (Max: 50MB for free plan)</small>
+                <small class="text-muted">MP4, WebM, MOV (Max: 50MB)</small>
             </div>
             <input type="file" id="videoFile" accept="video/*" style="display: none;" required>
+            <img id="thumbnailPreview" class="thumbnail-preview" alt="Thumbnail preview">
             <div class="mb-3"><label class="form-label">Title</label><input type="text" class="form-control" id="videoTitle" placeholder="Add a title" required></div>
             <div class="mb-3"><label class="form-label">Description</label><textarea class="form-control" id="videoDescription" rows="3" placeholder="Tell viewers about your video"></textarea></div>
             <div class="progress d-none" id="uploadProgress"><div class="progress-bar" id="progressBar" style="width: 0%"></div></div>
-            <button type="submit" class="btn btn-danger w-100 mt-3" id="uploadSubmitBtn"><i class="bi bi-cloud-arrow-up"></i> Upload to Hugging Face</button>
+            <button type="submit" class="btn btn-danger w-100 mt-3" id="uploadSubmitBtn"><i class="bi bi-cloud-arrow-up"></i> Upload</button>
         </form>
         <a href="index.html" class="btn btn-outline-light w-100 mt-3"><i class="bi bi-arrow-left"></i> Back to Home</a>
     </div>
 
-    <!-- Firebase Auth + Realtime Database -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -54,50 +55,69 @@
         const auth = firebase.auth();
         const db = firebase.database();
 
+        let thumbnailDataUrl = null;
+
         auth.onAuthStateChanged((user) => {
-            if (!user) {
-                alert('Please sign in to upload videos');
-                window.location.href = 'index.html';
-            }
+            if (!user) { alert('Please sign in to upload videos'); window.location.href = 'index.html'; }
         });
 
         const dropZone = document.getElementById('dropZone');
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#ff0000'; });
         dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#333'; });
         dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.style.borderColor = '#333';
+            e.preventDefault(); dropZone.style.borderColor = '#333';
             const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('video/')) document.getElementById('videoFile').files = e.dataTransfer.files;
+            if (file && file.type.startsWith('video/')) {
+                document.getElementById('videoFile').files = e.dataTransfer.files;
+                handleFile(file);
+            }
         });
 
         document.getElementById('videoFile').addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file) {
-                const videoPreview = document.createElement('video');
-                videoPreview.className = 'preview-video';
-                videoPreview.controls = true;
-                videoPreview.src = URL.createObjectURL(file);
-                const existing = document.querySelector('.preview-video');
-                if (existing) existing.remove();
-                dropZone.parentNode.insertBefore(videoPreview, dropZone.nextSibling);
-            }
+            if (file) handleFile(file);
         });
+
+        function handleFile(file) {
+            // Preview video
+            const video = document.createElement('video');
+            video.className = 'preview-video';
+            video.controls = true;
+            video.src = URL.createObjectURL(file);
+            const old = document.querySelector('.preview-video');
+            if (old) old.remove();
+            dropZone.parentNode.insertBefore(video, dropZone.nextSibling);
+
+            // Generate thumbnail
+            video.addEventListener('loadeddata', () => {
+                video.currentTime = 1; // Seek to 1 second
+            });
+            video.addEventListener('seeked', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 320;
+                canvas.height = 180;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                // Show thumbnail preview
+                const thumbImg = document.getElementById('thumbnailPreview');
+                thumbImg.src = thumbnailDataUrl;
+                thumbImg.style.display = 'block';
+            });
+        }
 
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const file = document.getElementById('videoFile').files[0];
             const title = document.getElementById('videoTitle').value.trim();
             const description = document.getElementById('videoDescription').value.trim();
-
-            if (!file || !title) { alert('Please select a video and enter a title'); return; }
-            if (file.size > 50 * 1024 * 1024) { alert('File size must be under 50MB'); return; }
+            if (!file || !title) { alert('Please select a video and add a title'); return; }
+            if (file.size > 50*1024*1024) { alert('File too large (max 50MB)'); return; }
 
             const user = auth.currentUser;
             const submitBtn = document.getElementById('uploadSubmitBtn');
             const progressDiv = document.getElementById('uploadProgress');
             const progressBar = document.getElementById('progressBar');
-
             submitBtn.disabled = true;
             progressDiv.classList.remove('d-none');
 
@@ -111,22 +131,21 @@
                     body: formData
                 });
 
-                // Debug: if the response is not ok, try to get text to see error
                 if (!response.ok) {
                     const text = await response.text();
-                    console.error('Server response:', text);
                     throw new Error('Upload failed: ' + text.substring(0, 100));
                 }
 
                 const result = await response.json();
                 const videoUrl = `https://sunnymavale-app.hf.space/videos/${result.filename}`;
 
-                // Save to Realtime Database
+                // Save to Realtime Database (with thumbnail)
                 const newVideoRef = db.ref('videos').push();
                 await newVideoRef.set({
                     title,
                     description,
                     url: videoUrl,
+                    thumbnail: thumbnailDataUrl || '', // base64 data URL
                     channel: user.email.split('@')[0],
                     channelIcon: user.email.charAt(0).toUpperCase(),
                     uploaderId: user.uid,
@@ -135,11 +154,11 @@
                     timestamp: Date.now()
                 });
 
-                alert('Video uploaded successfully!');
+                alert('Upload successful!');
                 window.location.href = 'index.html';
             } catch (error) {
-                console.error('Upload error:', error);
-                alert('Upload failed: ' + error.message);
+                console.error(error);
+                alert('Upload error: ' + error.message);
                 submitBtn.disabled = false;
                 progressDiv.classList.add('d-none');
             }
