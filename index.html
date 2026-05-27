@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Myflix</title>
+    <title>YouTube Clone</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
@@ -14,7 +14,7 @@
         .video-card:hover { transform: scale(1.02); }
         .thumbnail { width: 100%; border-radius: 12px; aspect-ratio: 16/9; object-fit: cover; background: #272727; }
         .video-info { display: flex; padding: 12px 0; }
-        .channel-icon { width: 36px; height: 36px; border-radius: 50%; margin-right: 12px; background: #4caf50; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .channel-icon { width: 36px; height: 36px; border-radius: 50%; margin-right: 12px; background: #4caf50; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; text-decoration: none; }
         .video-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .channel-name, .video-stats { font-size: 12px; color: var(--text-secondary); }
         .upload-btn { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; background: #ff0000; color: white; border: none; font-size: 24px; box-shadow: 0 4px 20px rgba(255,0,0,0.3); z-index: 1000; }
@@ -40,7 +40,6 @@
 
     <button class="upload-btn d-none" id="uploadBtn" title="Upload Video"><i class="bi bi-plus-lg"></i></button>
 
-    <!-- Firebase Auth + Realtime Database -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -93,15 +92,11 @@
 
         document.getElementById('uploadBtn').addEventListener('click', () => { window.location.href = 'upload.html'; });
 
-        // Load videos from Realtime Database
         function loadVideos() {
             db.ref('videos').orderByChild('timestamp').once('value')
                 .then((snapshot) => {
                     const videos = [];
-                    snapshot.forEach(child => {
-                        videos.push({ id: child.key, ...child.val() });
-                    });
-                    // Reverse to show newest first (since orderByChild returns ascending)
+                    snapshot.forEach(child => videos.push({ id: child.key, ...child.val() }));
                     videos.reverse();
                     displayVideos(videos);
                 })
@@ -120,14 +115,12 @@
             videoGrid.innerHTML = videos.map(video => `
                 <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                     <div class="video-card" onclick="window.location.href='watch.html?id=${video.id}'">
-                        <video class="thumbnail" poster="https://via.placeholder.com/320x180">
-                            <source src="${video.url}" type="video/mp4">
-                        </video>
+                        <img class="thumbnail" src="${video.thumbnail || 'https://via.placeholder.com/320x180'}" alt="thumbnail">
                         <div class="video-info">
-                            <div class="channel-icon">${(video.channel || 'U').charAt(0).toUpperCase()}</div>
+                            <a href="channel.html?uid=${video.uploaderId}" class="channel-icon" onclick="event.stopPropagation();">${(video.channel || 'U').charAt(0).toUpperCase()}</a>
                             <div>
                                 <div class="video-title">${video.title || 'Untitled'}</div>
-                                <div class="channel-name">${video.channel || 'Anonymous'}</div>
+                                <a href="channel.html?uid=${video.uploaderId}" class="channel-name" onclick="event.stopPropagation();" style="text-decoration: none; color: #aaaaaa;">${video.channel || 'Anonymous'}</a>
                                 <div class="video-stats">${video.views || 0} views • ${getTimeAgo(video.timestamp)}</div>
                             </div>
                         </div>
@@ -139,8 +132,7 @@
         function getTimeAgo(timestamp) {
             if (!timestamp) return 'Just now';
             const now = Date.now();
-            const date = new Date(timestamp).getTime();
-            const seconds = Math.floor((now - date) / 1000);
+            const seconds = Math.floor((now - timestamp) / 1000);
             if (seconds < 60) return 'Just now';
             if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
             if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
