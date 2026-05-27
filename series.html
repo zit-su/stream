@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Series - MyFlix</title>
+    <title>Series - YouTube Clone</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
         :root { --bg-primary: #0f0f0f; --bg-secondary: #272727; --text-primary: #ffffff; --text-secondary: #aaaaaa; }
         body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Roboto', sans-serif; }
@@ -21,7 +22,10 @@
     <nav class="navbar">
         <div class="container-fluid">
             <a href="index.html" class="navbar-brand text-white"><i class="bi bi-youtube text-danger"></i> Clone</a>
-            <a href="index.html" class="btn btn-outline-light btn-sm">Videos</a>
+            <div class="d-flex gap-2">
+                <a href="index.html" class="btn btn-outline-light btn-sm">Videos</a>
+                <div id="authButtons"><button class="btn btn-outline-light btn-sm" id="loginBtn"><i class="bi bi-person-circle"></i> Sign In</button></div>
+            </div>
         </div>
     </nav>
 
@@ -29,6 +33,7 @@
         <div class="d-flex justify-content-between align-items-center">
             <h3>Series</h3>
             <button class="btn btn-danger" id="createSeriesBtn" style="display:none;">Create Series</button>
+            <button class="btn btn-outline-light" id="signInToCreateBtn" style="display:none;">Sign in to create</button>
         </div>
         <div class="row" id="seriesGrid">
             <div class="loading"><div class="spinner-border text-danger"></div></div>
@@ -53,12 +58,45 @@
         const auth = firebase.auth();
         const db = firebase.database();
 
+        // Authentication UI (same as index)
         auth.onAuthStateChanged(user => {
+            const loginBtn = document.getElementById('loginBtn');
+            const createBtn = document.getElementById('createSeriesBtn');
+            const signInToCreateBtn = document.getElementById('signInToCreateBtn');
             if (user) {
-                document.getElementById('createSeriesBtn').style.display = 'block';
-                document.getElementById('createSeriesBtn').onclick = () => window.location.href = 'upload-series.html';
+                loginBtn.innerHTML = `<i class="bi bi-person-check"></i> ${user.email}`;
+                loginBtn.className = 'btn btn-outline-success btn-sm';
+                loginBtn.onclick = () => { if (confirm('Sign out?')) auth.signOut(); };
+                createBtn.style.display = 'inline-block';
+                signInToCreateBtn.style.display = 'none';
+                createBtn.onclick = () => window.location.href = 'upload-series.html';
+            } else {
+                loginBtn.innerHTML = '<i class="bi bi-person-circle"></i> Sign In';
+                loginBtn.className = 'btn btn-outline-light btn-sm';
+                loginBtn.onclick = () => promptSignIn();
+                createBtn.style.display = 'none';
+                signInToCreateBtn.style.display = 'inline-block';
+                signInToCreateBtn.onclick = () => promptSignIn();
             }
         });
+
+        function promptSignIn() {
+            const email = prompt('Email:');
+            if (!email) return;
+            const password = prompt('Password:');
+            if (!password) return;
+            auth.signInWithEmailAndPassword(email, password)
+                .catch((error) => {
+                    if (error.code === 'auth/user-not-found') {
+                        if (confirm('Account not found. Create new account?')) {
+                            auth.createUserWithEmailAndPassword(email, password)
+                                .catch(err => alert(err.message));
+                        }
+                    } else {
+                        alert(error.message);
+                    }
+                });
+        }
 
         function loadSeries() {
             db.ref('series').once('value').then(snapshot => {
