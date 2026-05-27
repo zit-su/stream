@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Series Details</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #0f0f0f; color: white; }
+        .container { padding: 20px; }
+        .season-card { background: #1a1a1a; border-radius: 12px; padding: 15px; margin-bottom: 10px; cursor: pointer; }
+        .episode-item { background: #222; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; gap: 12px; align-items: center; cursor: pointer; }
+        .episode-thumb { width: 120px; height: 68px; border-radius: 8px; object-fit: cover; }
+        .btn-add { background: #ff0000; border: none; color: white; border-radius: 20px; padding: 6px 16px; margin: 10px 0; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <nav class="navbar" style="background:#0f0f0f; border-bottom:1px solid #333;">
+        <div class="container-fluid">
+            <a href="series.html" class="navbar-brand text-white">← Series</a>
+        </div>
+    </nav>
+
+    <div class="container" id="seriesDetail"></div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAPNK7PEPK90SMSQDCSne3wBr1OYoAXxM",
+            authDomain: "store-data-for-sms.firebaseapp.com",
+            databaseURL: "https://store-data-for-sms-default-rtdb.firebaseio.com",
+            projectId: "store-data-for-sms",
+            storageBucket: "store-data-for-sms.firebasestorage.app",
+            messagingSenderId: "508840668923",
+            appId: "1:508840668923:web:0e1e9ebc788bdf1e74ca5e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+        const urlParams = new URLSearchParams(window.location.search);
+        const seriesId = urlParams.get('id');
+        let currentUser = null;
+
+        auth.onAuthStateChanged(user => { currentUser = user; loadSeriesDetail(); });
+
+        async function loadSeriesDetail() {
+            if (!seriesId) return;
+            const snap = await db.ref('series/' + seriesId).once('value');
+            if (!snap.exists()) { alert('Series not found'); return; }
+            const series = snap.val();
+            let html = `
+                <div class="row">
+                    <div class="col-md-3">
+                        <img src="${series.poster || 'https://via.placeholder.com/200x300'}" style="width:100%; border-radius:12px;">
+                    </div>
+                    <div class="col-md-9">
+                        <h2>${series.title}</h2>
+                        <p>${series.description || ''}</p>
+                        ${currentUser ? `<button class="btn-add" id="addSeasonBtn">+ Add Season</button>` : ''}
+                        <div id="seasonsContainer"></div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('seriesDetail').innerHTML = html;
+            loadSeasons(seriesId);
+            if (currentUser) {
+                document.getElementById('addSeasonBtn').addEventListener('click', () => addSeason(seriesId));
+            }
+        }
+
+        async function loadSeasons(seriesId) {
+            const snap = await db.ref('seasons').orderByChild('seriesId').equalTo(seriesId).once('value');
+            const seasons = [];
+            snap.forEach(child => seasons.push({ id: child.key, ...child.val() }));
+            seasons.sort((a,b) => a.seasonNumber - b.seasonNumber);
+            let html = '';
+            for (let season of seasons) {
+                html += `
+                    <div class="season-card" onclick="toggleEpisodes('${season.id}')">
+                        <strong>Season ${season.seasonNumber}</strong> ${season.title || ''}
+                        <div class="episodes-list hidden" id="episodes-${season.id}"></div>
+                        ${currentUser ? `<button class="btn-add btn-sm" onclick="event.stopPropagation(); uploadEpisode('${seriesId}','${season.id}')">+ Episode</button>` : ''}
+                    </div>`;
+            }
+            document.getElementById('seasonsContainer').innerHTML = html || '<p>No seasons yet.</p>';
+        }
+
+        async function toggleEpisodes(seasonId) {
+            const container = document.getElementById('episodes-' + seasonId);
+            if (!container.classList.contains('hidden')) {
+                container.classList.add('hidden');
+                return;
+            }
+            container.classList.remove('hidden');
+            const snap = await db.ref('episodes').orderByChild('seasonId').equalTo(seasonId).once('value');
+            const episodes = [];
+            snap.forEach(child => episodes.push({ id: child.key, ...child.val() }));
+            episodes.sort((a,b) => a.episodeNumber - b.episodeNumber);
+            let epHtml = '';
+            episodes.forEach(ep => {
+                epHtml += `
+                    <div class="episode-item" onclick="window.location.href='watch.html?id=${ep.id}&type=episode'">
+                        <img class="episode-thumb" src="${ep.thumbnail || 'https://via.placeholder.com/320x180'}">
+                        <div>
+                            <div><strong>${ep.episodeNumber}. ${ep.title}</strong></div>
+                            <small>${ep.description || ''}</small>
+                        </div>
+                    </div>`;
+            });
+            container.innerHTML = epHtml || '<p>No episodes yet.</p>';
+        }
+
+        function addSeason(seriesId) {
+            const num = prompt('Season number:');
+            if (!num) return;
+            const title = prompt('Season title (optional):') || '';
+            db.ref('seasons').push({
+                seriesId, seasonNumber: parseInt(num), title,
+                timestamp: Date.now()
+            }).then(() => {
+                loadSeasons(seriesId);
+            });
+        }
+
+        function uploadEpisode(seriesId, seasonId) {
+            const epNum = prompt('Episode number:');
+            if (!epNum) return;
+            const title = prompt('Episode title:') || '';
+            const desc = prompt('Description:') || '';
+            window.location.href = `upload-episode.html?seriesId=${seriesId}&seasonId=${seasonId}&epNum=${epNum}&title=${encodeURIComponent(title)}&desc=${encodeURIComponent(desc)}`;
+        }
+    </script>
+</body>
+</html>
