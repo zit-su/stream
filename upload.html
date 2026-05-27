@@ -14,7 +14,6 @@
             align-items: center;
             justify-content: center;
         }
-        
         .upload-container {
             background: #1a1a1a;
             border-radius: 16px;
@@ -23,7 +22,6 @@
             width: 100%;
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
         }
-        
         .file-upload-area {
             border: 2px dashed #333;
             border-radius: 12px;
@@ -33,37 +31,31 @@
             transition: all 0.3s;
             margin-bottom: 20px;
         }
-        
         .file-upload-area:hover {
             border-color: #ff0000;
             background: rgba(255,0,0,0.05);
         }
-        
         .form-control {
             background: #272727;
             border: 1px solid #333;
             color: white;
         }
-        
         .form-control:focus {
             background: #333;
             border-color: #ff0000;
             color: white;
             box-shadow: none;
         }
-        
         .progress {
             height: 8px;
             background: #333;
             border-radius: 4px;
             margin-top: 20px;
         }
-        
         .progress-bar {
             background: #ff0000;
             border-radius: 4px;
         }
-        
         .preview-video {
             width: 100%;
             border-radius: 8px;
@@ -75,47 +67,40 @@
 <body>
     <div class="upload-container">
         <h3 class="mb-4"><i class="bi bi-cloud-upload"></i> Upload Video</h3>
-        
         <form id="uploadForm">
             <div class="file-upload-area" id="dropZone" onclick="document.getElementById('videoFile').click()">
                 <i class="bi bi-camera-video" style="font-size: 48px; color: #666;"></i>
                 <p class="mt-2 mb-0">Click or drag video here</p>
-                <small class="text-muted">MP4, WebM, MOV (Max: 50MB)</small>
+                <small class="text-muted">MP4, WebM, MOV (Max: 50MB for free plan)</small>
             </div>
-            
             <input type="file" id="videoFile" accept="video/*" style="display: none;" required>
-            
             <div class="mb-3">
                 <label class="form-label">Title</label>
                 <input type="text" class="form-control" id="videoTitle" placeholder="Add a title" required>
             </div>
-            
             <div class="mb-3">
                 <label class="form-label">Description</label>
                 <textarea class="form-control" id="videoDescription" rows="3" placeholder="Tell viewers about your video"></textarea>
             </div>
-            
             <div class="progress d-none" id="uploadProgress">
                 <div class="progress-bar" id="progressBar" style="width: 0%"></div>
             </div>
-            
             <button type="submit" class="btn btn-danger w-100 mt-3" id="uploadSubmitBtn">
-                <i class="bi bi-cloud-arrow-up"></i> Upload Video
+                <i class="bi bi-cloud-arrow-up"></i> Upload to Hugging Face
             </button>
         </form>
-        
         <a href="index.html" class="btn btn-outline-light w-100 mt-3">
             <i class="bi bi-arrow-left"></i> Back to Home
         </a>
     </div>
 
+    <!-- Firebase Auth & Firestore only (no Storage) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
-    
+
     <script>
-        // Your Firebase configuration
+        // Firebase config
         const firebaseConfig = {
             apiKey: "AIzaSyAAPNK7PEPK90SMSQDCSne3wBr1OYoAXxM",
             authDomain: "store-data-for-sms.firebaseapp.com",
@@ -125,32 +110,27 @@
             messagingSenderId: "508840668923",
             appId: "1:508840668923:web:0e1e9ebc788bdf1e74ca5e"
         };
-        
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
-        const storage = firebase.storage();
-        
-        // Check if user is logged in
+
+        // Redirect if not logged in
         auth.onAuthStateChanged((user) => {
             if (!user) {
                 alert('Please sign in to upload videos');
                 window.location.href = 'index.html';
             }
         });
-        
+
         // Drag and drop
         const dropZone = document.getElementById('dropZone');
-        
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropZone.style.borderColor = '#ff0000';
         });
-        
         dropZone.addEventListener('dragleave', () => {
             dropZone.style.borderColor = '#333';
         });
-        
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.style.borderColor = '#333';
@@ -159,7 +139,8 @@
                 document.getElementById('videoFile').files = e.dataTransfer.files;
             }
         });
-        
+
+        // Preview video
         document.getElementById('videoFile').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -167,110 +148,77 @@
                 videoPreview.className = 'preview-video';
                 videoPreview.controls = true;
                 videoPreview.src = URL.createObjectURL(file);
-                
-                const existingPreview = document.querySelector('.preview-video');
-                if (existingPreview) {
-                    existingPreview.remove();
-                }
-                
+                const existing = document.querySelector('.preview-video');
+                if (existing) existing.remove();
                 dropZone.parentNode.insertBefore(videoPreview, dropZone.nextSibling);
             }
         });
-        
-        // Upload form submission
+
+        // Form submission
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const file = document.getElementById('videoFile').files[0];
-            const title = document.getElementById('videoTitle').value;
-            const description = document.getElementById('videoDescription').value;
-            
+            const title = document.getElementById('videoTitle').value.trim();
+            const description = document.getElementById('videoDescription').value.trim();
+
             if (!file || !title) {
-                alert('Please select a video and add a title');
+                alert('Please select a video and enter a title');
                 return;
             }
-            
-            // Check file size (50MB limit for free plan)
             if (file.size > 50 * 1024 * 1024) {
-                alert('File size must be less than 50MB');
+                alert('File size must be under 50MB for the free plan');
                 return;
             }
-            
+
             const user = auth.currentUser;
             const submitBtn = document.getElementById('uploadSubmitBtn');
-            const progressBar = document.getElementById('progressBar');
             const progressDiv = document.getElementById('uploadProgress');
-            
+            const progressBar = document.getElementById('progressBar');
+
             submitBtn.disabled = true;
             progressDiv.classList.remove('d-none');
-            
+
             try {
-                // Upload to Firebase Storage
-                const storageRef = storage.ref(`videos/${user.uid}/${Date.now()}_${file.name}`);
-                const uploadTask = storageRef.put(file);
-                
-                uploadTask.on('state_changed', 
-                    (snapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        progressBar.style.width = progress + '%';
-                    },
-                    (error) => {
-                        console.error('Upload failed:', error);
-                        alert('Upload failed: ' + error.message);
-                        submitBtn.disabled = false;
-                    },
-                    async () => {
-                        // Get download URL
-                        const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-                        
-                        // Save to Firestore
-                        await db.collection('videos').add({
-                            title: title,
-                            description: description,
-                            url: downloadURL,
-                            thumbnail: downloadURL, // You can generate thumbnail later
-                            channel: user.email.split('@')[0],
-                            channelIcon: user.email.charAt(0).toUpperCase(),
-                            uploaderId: user.uid,
-                            views: 0,
-                            likes: 0,
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        
-                        // Also upload to Hugging Face for public access
-                        await uploadToHuggingFace(file, title, downloadURL);
-                        
-                        alert('Video uploaded successfully!');
-                        window.location.href = 'index.html';
-                    }
-                );
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error uploading video: ' + error.message);
-                submitBtn.disabled = false;
-            }
-        });
-        
-        // Upload to Hugging Face Space
-        async function uploadToHuggingFace(file, title, firebaseUrl) {
-            try {
+                // Upload directly to Hugging Face Space
                 const formData = new FormData();
                 formData.append('file', file);
-                formData.append('title', title);
-                formData.append('firebaseUrl', firebaseUrl);
-                
+                formData.append('title', title);  // we can use it server-side if needed
+
                 const response = await fetch('https://sunnymavale-app.hf.space/upload', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 if (!response.ok) {
-                    console.warn('Hugging Face upload failed, but video is on Firebase');
+                    const error = await response.json();
+                    throw new Error(error.error || 'Upload failed');
                 }
+
+                const result = await response.json();
+                const videoUrl = `https://sunnymavale-app.hf.space/videos/${result.filename}`;
+
+                // Save metadata to Firestore
+                await db.collection('videos').add({
+                    title: title,
+                    description: description,
+                    url: videoUrl,                // Hugging Face URL
+                    channel: user.email.split('@')[0],
+                    channelIcon: user.email.charAt(0).toUpperCase(),
+                    uploaderId: user.uid,
+                    views: 0,
+                    likes: 0,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                alert('Video uploaded successfully!');
+                window.location.href = 'index.html';
             } catch (error) {
-                console.warn('Hugging Face upload error:', error);
+                console.error('Upload error:', error);
+                alert('Upload failed: ' + error.message);
+                submitBtn.disabled = false;
+                progressDiv.classList.add('d-none');
             }
-        }
+        });
     </script>
 </body>
 </html>
