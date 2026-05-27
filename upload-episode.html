@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Episode</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #0f0f0f; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .upload-container { background: #1a1a1a; border-radius: 16px; padding: 40px; max-width: 500px; width: 100%; }
+        .form-control { background: #272727; border: 1px solid #333; color: white; }
+        .progress { height: 8px; background: #333; border-radius: 4px; margin-top: 20px; }
+        .progress-bar { background: #ff0000; }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h3>Upload Episode</h3>
+        <form id="episodeForm">
+            <input type="hidden" id="seriesId">
+            <input type="hidden" id="seasonId">
+            <input type="hidden" id="epNum">
+            <div class="mb-3"><label>Title</label><input type="text" class="form-control" id="title" required></div>
+            <div class="mb-3"><label>Description</label><textarea class="form-control" id="desc"></textarea></div>
+            <div class="mb-3"><label>Video File</label><input type="file" class="form-control" id="videoFile" accept="video/*" required></div>
+            <div class="progress d-none" id="progressContainer"><div class="progress-bar" id="progressBar"></div></div>
+            <button type="submit" class="btn btn-danger w-100 mt-3">Upload Episode</button>
+        </form>
+        <a href="series.html" class="btn btn-outline-light w-100 mt-3">Cancel</a>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAPNK7PEPK90SMSQDCSne3wBr1OYoAXxM",
+            authDomain: "store-data-for-sms.firebaseapp.com",
+            databaseURL: "https://store-data-for-sms-default-rtdb.firebaseio.com",
+            projectId: "store-data-for-sms",
+            storageBucket: "store-data-for-sms.firebasestorage.app",
+            messagingSenderId: "508840668923",
+            appId: "1:508840668923:web:0e1e9ebc788bdf1e74ca5e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        const params = new URLSearchParams(window.location.search);
+        document.getElementById('seriesId').value = params.get('seriesId');
+        document.getElementById('seasonId').value = params.get('seasonId');
+        document.getElementById('epNum').value = params.get('epNum');
+        document.getElementById('title').value = decodeURIComponent(params.get('title') || '');
+        document.getElementById('desc').value = decodeURIComponent(params.get('desc') || '');
+
+        auth.onAuthStateChanged(user => { if (!user) window.location.href = 'index.html'; });
+
+        document.getElementById('episodeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = document.getElementById('videoFile').files[0];
+            if (!file) return alert('Select a video');
+            const title = document.getElementById('title').value.trim();
+            if (!title) return alert('Title required');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('title', title);
+            document.getElementById('progressContainer').classList.remove('d-none');
+            try {
+                const resp = await fetch('https://sunnymavale-app.hf.space/upload', { method:'POST', body: formData });
+                if (!resp.ok) throw new Error('Upload failed');
+                const result = await resp.json();
+                const videoUrl = `https://sunnymavale-app.hf.space/videos/${result.filename}`;
+
+                // Placeholder thumbnail – you can improve by extracting a frame from the video
+                const thumbnail = 'https://via.placeholder.com/320x180';
+
+                const epRef = db.ref('episodes').push();
+                await epRef.set({
+                    seriesId: document.getElementById('seriesId').value,
+                    seasonId: document.getElementById('seasonId').value,
+                    episodeNumber: parseInt(document.getElementById('epNum').value),
+                    title,
+                    description: document.getElementById('desc').value.trim(),
+                    videoUrl,
+                    thumbnail,
+                    timestamp: Date.now()
+                });
+                alert('Episode uploaded!');
+                window.location.href = `series-detail.html?id=${document.getElementById('seriesId').value}`;
+            } catch(err) {
+                alert('Error: ' + err.message);
+                document.getElementById('progressContainer').classList.add('d-none');
+            }
+        });
+    </script>
+</body>
+</html>
