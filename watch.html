@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watch Video - YouTube Clone</title>
+    <title>Watch MyFlix</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
         body { background: #0f0f0f; color: white; margin: 0; padding: 0; }
         .video-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
@@ -16,14 +17,20 @@
         .action-btn:hover { background: #333; }
         .action-btn.liked { color: #065fd4; }
         .channel-section { display: flex; align-items: center; gap: 15px; padding: 15px 0; border-top: 1px solid #333; border-bottom: 1px solid #333; }
+        .channel-icon-link { width: 40px; height: 40px; border-radius: 50%; background: #4caf50; display: flex; align-items: center; justify-content: center; font-weight: bold; text-decoration: none; color: white; }
         .description-box { background: #272727; border-radius: 12px; padding: 15px; margin-top: 15px; }
+        .comments-section { margin-top: 30px; }
+        .comment { background: #1a1a1a; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .comment small { color: #aaa; }
+        .comment-input { background: #272727; border: 1px solid #333; color: white; border-radius: 8px; padding: 10px; width: 100%; margin-bottom: 10px; }
+        .btn-comment { background: #065fd4; border: none; color: white; padding: 10px 20px; border-radius: 20px; }
         .loading { text-align: center; padding: 50px; }
     </style>
 </head>
 <body>
     <nav class="navbar" style="background: #0f0f0f; border-bottom: 1px solid #333;">
         <div class="container-fluid">
-            <a href="index.html" class="navbar-brand text-white"><i class="bi bi-youtube text-danger" style="font-size: 28px;"></i> YouTube Clone</a>
+            <a href="index.html" class="navbar-brand text-white"><i class="bi bi-youtube text-danger" style="font-size: 28px;"></i> MyFlix</a>
         </div>
     </nav>
 
@@ -31,9 +38,9 @@
         <div class="loading"><div class="spinner-border text-danger"></div></div>
     </div>
 
-    <!-- Firebase Auth + Realtime Database -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
     <script>
         const firebaseConfig = {
@@ -47,23 +54,27 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        const auth = firebase.auth();
 
         const urlParams = new URLSearchParams(window.location.search);
         const videoId = urlParams.get('id');
+        let currentUser = null;
+
+        auth.onAuthStateChanged((user) => {
+            currentUser = user;
+            loadVideo();
+        });
 
         async function loadVideo() {
             if (!videoId) { window.location.href = 'index.html'; return; }
             try {
                 const snapshot = await db.ref('videos/' + videoId).once('value');
-                if (!snapshot.exists()) {
-                    alert('Video not found');
-                    window.location.href = 'index.html';
-                    return;
-                }
+                if (!snapshot.exists()) { alert('Video not found'); window.location.href = 'index.html'; return; }
                 const video = snapshot.val();
                 // Increment views
                 db.ref('videos/' + videoId + '/views').transaction(current => (current || 0) + 1);
                 displayVideo(video);
+                loadComments();
             } catch (error) {
                 console.error('Error loading video:', error);
                 document.getElementById('videoContent').innerHTML = '<div class="text-center p-5"><h3>Error loading video</h3></div>';
@@ -72,6 +83,7 @@
 
         function displayVideo(video) {
             const content = document.getElementById('videoContent');
+            const channelLink = `channel.html?uid=${video.uploaderId}`;
             content.innerHTML = `
                 <video controls autoplay>
                     <source src="${video.url}" type="video/mp4">
@@ -92,15 +104,48 @@
                         </div>
                     </div>
                     <div class="channel-section">
-                        <div style="width:40px;height:40px;border-radius:50%;background:#4caf50;display:flex;align-items:center;justify-content:center;font-weight:bold;">${video.channelIcon || 'U'}</div>
-                        <div><strong>${video.channel || 'Anonymous'}</strong><br><small class="text-muted">0 subscribers</small></div>
+                        <a href="${channelLink}" class="channel-icon-link">${video.channelIcon || 'U'}</a>
+                        <div>
+                            <a href="${channelLink}" style="color: white; text-decoration: none;"><strong>${video.channel || 'Anonymous'}</strong></a>
+                            <br><small class="text-muted">0 subscribers</small>
+                        </div>
                     </div>
                     <div class="description-box"><p>${video.description || 'No description'}</p></div>
+                </div>
+
+                <!-- Comments Section -->
+                <div class="comments-section">
+                    <h5>Comments</h5>
+                    ${currentUser ? `
+                        <div class="d-flex gap-2">
+                            <input type="text" class="comment-input" id="commentInput" placeholder="Add a comment...">
+                            <button class="btn-comment" onclick="postComment()">Post</button>
+                        </div>
+                    ` : `<p><a href="#" onclick="signInPrompt()">Sign in</a> to comment.</p>`}
+                    <div id="commentsList"></div>
                 </div>
             `;
 
             const liked = localStorage.getItem(`liked_${videoId}`);
             if (liked) document.getElementById('likeBtn').classList.add('liked');
+        }
+
+        function signInPrompt() {
+            const email = prompt('Email:');
+            if (!email) return;
+            const password = prompt('Password:');
+            if (!password) return;
+            auth.signInWithEmailAndPassword(email, password)
+                .catch(error => {
+                    if (error.code === 'auth/user-not-found') {
+                        if (confirm('Create new account?')) {
+                            auth.createUserWithEmailAndPassword(email, password)
+                                .catch(err => alert(err.message));
+                        }
+                    } else {
+                        alert(error.message);
+                    }
+                });
         }
 
         function toggleLike() {
@@ -128,7 +173,53 @@
             }
         }
 
-        loadVideo();
+        // Comments logic
+        function loadComments() {
+            db.ref('comments').orderByChild('videoId').equalTo(videoId).on('value', (snapshot) => {
+                const commentsList = document.getElementById('commentsList');
+                if (!commentsList) return;
+                let html = '';
+                snapshot.forEach(child => {
+                    const c = child.val();
+                    html += `
+                        <div class="comment">
+                            <strong>${c.author}</strong> <small>${getTimeAgo(c.timestamp)}</small>
+                            <p class="mb-0 mt-1">${c.text}</p>
+                        </div>
+                    `;
+                });
+                commentsList.innerHTML = html || '<p class="text-muted">No comments yet.</p>';
+            });
+        }
+
+        function postComment() {
+            const input = document.getElementById('commentInput');
+            const text = input.value.trim();
+            if (!text) return;
+            if (!currentUser) { alert('Please sign in first'); return; }
+
+            db.ref('comments').push({
+                videoId: videoId,
+                author: currentUser.email.split('@')[0],
+                text: text,
+                timestamp: Date.now()
+            }).then(() => {
+                input.value = '';
+            }).catch(err => alert('Error: ' + err.message));
+        }
+
+        function getTimeAgo(timestamp) {
+            if (!timestamp) return '';
+            const now = Date.now();
+            const seconds = Math.floor((now - timestamp) / 1000);
+            if (seconds < 60) return 'Just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+            return new Date(timestamp).toLocaleDateString();
+        }
+
+        // Initial load happens after auth state is set
     </script>
 </body>
 </html>
