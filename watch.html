@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watch MyFlix</title>
+    <title>Watch Video - YouTube Clone</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
@@ -30,7 +30,7 @@
 <body>
     <nav class="navbar" style="background: #0f0f0f; border-bottom: 1px solid #333;">
         <div class="container-fluid">
-            <a href="index.html" class="navbar-brand text-white"><i class="bi bi-youtube text-danger" style="font-size: 28px;"></i> MyFlix</a>
+            <a href="index.html" class="navbar-brand text-white"><i class="bi bi-youtube text-danger" style="font-size: 28px;"></i> YouTube Clone</a>
         </div>
     </nav>
 
@@ -58,6 +58,7 @@
 
         const urlParams = new URLSearchParams(window.location.search);
         const videoId = urlParams.get('id');
+        const type = urlParams.get('type'); // "episode" for series episodes
         let currentUser = null;
 
         auth.onAuthStateChanged((user) => {
@@ -68,12 +69,41 @@
         async function loadVideo() {
             if (!videoId) { window.location.href = 'index.html'; return; }
             try {
-                const snapshot = await db.ref('videos/' + videoId).once('value');
+                let snapshot;
+                let videoData;
+                if (type === 'episode') {
+                    snapshot = await db.ref('episodes/' + videoId).once('value');
+                } else {
+                    snapshot = await db.ref('videos/' + videoId).once('value');
+                }
                 if (!snapshot.exists()) { alert('Video not found'); window.location.href = 'index.html'; return; }
-                const video = snapshot.val();
+                videoData = snapshot.val();
+
                 // Increment views
-                db.ref('videos/' + videoId + '/views').transaction(current => (current || 0) + 1);
-                displayVideo(video);
+                if (type === 'episode') {
+                    db.ref('episodes/' + videoId + '/views').transaction(current => (current || 0) + 1);
+                } else {
+                    db.ref('videos/' + videoId + '/views').transaction(current => (current || 0) + 1);
+                }
+
+                // For episodes, build a compatible video object for display
+                let displayVideo = {
+                    url: videoData.videoUrl,
+                    title: videoData.title,
+                    description: videoData.description,
+                    views: videoData.views || 0,
+                    likes: videoData.likes || 0,
+                    channel: 'Series Episode',
+                    channelIcon: 'S',
+                    uploaderId: null
+                };
+                if (type !== 'episode') {
+                    displayVideo = videoData;
+                } else {
+                    // For episodes, we might not have channel info, so just use placeholder
+                    displayVideo.channelIcon = 'E';
+                }
+                displayVideo(displayVideo);
                 loadComments();
             } catch (error) {
                 console.error('Error loading video:', error);
@@ -83,7 +113,7 @@
 
         function displayVideo(video) {
             const content = document.getElementById('videoContent');
-            const channelLink = `channel.html?uid=${video.uploaderId}`;
+            const channelLink = video.uploaderId ? `channel.html?uid=${video.uploaderId}` : '#';
             content.innerHTML = `
                 <video controls autoplay>
                     <source src="${video.url}" type="video/mp4">
@@ -151,15 +181,16 @@
         function toggleLike() {
             const likeBtn = document.getElementById('likeBtn');
             const liked = localStorage.getItem(`liked_${videoId}`);
+            const refPath = type === 'episode' ? 'episodes/' + videoId + '/likes' : 'videos/' + videoId + '/likes';
             if (liked) {
                 localStorage.removeItem(`liked_${videoId}`);
                 likeBtn.classList.remove('liked');
-                db.ref('videos/' + videoId + '/likes').transaction(current => (current || 1) - 1);
+                db.ref(refPath).transaction(current => (current || 1) - 1);
                 document.getElementById('likeCount').textContent = Math.max(0, parseInt(document.getElementById('likeCount').textContent) - 1);
             } else {
                 localStorage.setItem(`liked_${videoId}`, 'true');
                 likeBtn.classList.add('liked');
-                db.ref('videos/' + videoId + '/likes').transaction(current => (current || 0) + 1);
+                db.ref(refPath).transaction(current => (current || 0) + 1);
                 document.getElementById('likeCount').textContent = parseInt(document.getElementById('likeCount').textContent) + 1;
             }
         }
@@ -173,7 +204,6 @@
             }
         }
 
-        // Comments logic
         function loadComments() {
             db.ref('comments').orderByChild('videoId').equalTo(videoId).on('value', (snapshot) => {
                 const commentsList = document.getElementById('commentsList');
@@ -199,7 +229,7 @@
             if (!currentUser) { alert('Please sign in first'); return; }
 
             db.ref('comments').push({
-                videoId: videoId,
+                videoId: videoId,  // note: for episodes, we still use videoId (which is the episode ID)
                 author: currentUser.email.split('@')[0],
                 text: text,
                 timestamp: Date.now()
@@ -218,8 +248,6 @@
             if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
             return new Date(timestamp).toLocaleDateString();
         }
-
-        // Initial load happens after auth state is set
     </script>
 </body>
 </html>
