@@ -21,6 +21,7 @@
         .loading { text-align: center; padding: 40px; }
         .search-bar { background: var(--bg-secondary); border: 1px solid #333; color: white; border-radius: 20px; padding: 8px 20px; width: 100%; max-width: 600px; }
         .search-bar:focus { outline: none; border-color: #1c62b9; background: #121212; }
+        .error-message { color: #ff4444; text-align: center; padding: 20px; }
     </style>
 </head>
 <body>
@@ -93,16 +94,24 @@
         document.getElementById('uploadBtn').addEventListener('click', () => { window.location.href = 'upload.html'; });
 
         function loadVideos() {
-            db.ref('videos').orderByChild('timestamp').once('value')
+            const videoGrid = document.getElementById('videoGrid');
+            videoGrid.innerHTML = '<div class="loading"><div class="spinner-border text-danger"></div><p>Loading videos...</p></div>';
+
+            db.ref('videos').once('value')
                 .then((snapshot) => {
                     const videos = [];
-                    snapshot.forEach(child => videos.push({ id: child.key, ...child.val() }));
-                    videos.reverse();
+                    snapshot.forEach(child => {
+                        videos.push({ id: child.key, ...child.val() });
+                    });
+                    videos.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                     displayVideos(videos);
                 })
                 .catch(error => {
                     console.error('Error loading videos:', error);
-                    document.getElementById('videoGrid').innerHTML = '<div class="col-12 text-center"><p>No videos found.</p></div>';
+                    videoGrid.innerHTML = `<div class="error-message">
+                        Failed to load videos: ${error.message}<br>
+                        <small>Check your internet and Firebase rules.</small>
+                    </div>`;
                 });
         }
 
