@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Series - MyFlix</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root { --bg-primary: #0f0f0f; --bg-secondary: #272727; --text-primary: #ffffff; --text-secondary: #aaaaaa; }
+        body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Roboto', sans-serif; }
+        .navbar { background: var(--bg-primary); border-bottom: 1px solid #333; }
+        .series-card { cursor: pointer; transition: transform 0.2s; margin-bottom: 20px; }
+        .series-card:hover { transform: scale(1.02); }
+        .series-poster { width: 100%; border-radius: 12px; aspect-ratio: 2/3; object-fit: cover; background: #333; }
+        .series-title { font-size: 16px; font-weight: 500; margin-top: 8px; }
+        .btn-create { background: #ff0000; border: none; color: white; border-radius: 20px; padding: 8px 20px; margin: 20px 0; }
+        .loading { text-align: center; padding: 40px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container-fluid">
+            <a href="index.html" class="navbar-brand text-white"><i class="bi bi-youtube text-danger"></i> Clone</a>
+            <a href="index.html" class="btn btn-outline-light btn-sm">Videos</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <h3>Series</h3>
+            <button class="btn btn-danger" id="createSeriesBtn" style="display:none;">Create Series</button>
+        </div>
+        <div class="row" id="seriesGrid">
+            <div class="loading"><div class="spinner-border text-danger"></div></div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAPNK7PEPK90SMSQDCSne3wBr1OYoAXxM",
+            authDomain: "store-data-for-sms.firebaseapp.com",
+            databaseURL: "https://store-data-for-sms-default-rtdb.firebaseio.com",
+            projectId: "store-data-for-sms",
+            storageBucket: "store-data-for-sms.firebasestorage.app",
+            messagingSenderId: "508840668923",
+            appId: "1:508840668923:web:0e1e9ebc788bdf1e74ca5e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('createSeriesBtn').style.display = 'block';
+                document.getElementById('createSeriesBtn').onclick = () => window.location.href = 'upload-series.html';
+            }
+        });
+
+        function loadSeries() {
+            db.ref('series').once('value').then(snapshot => {
+                const series = [];
+                snapshot.forEach(child => series.push({ id: child.key, ...child.val() }));
+                series.sort((a,b) => (b.timestamp||0)-(a.timestamp||0));
+                displaySeries(series);
+            }).catch(err => {
+                console.error(err);
+                document.getElementById('seriesGrid').innerHTML = '<p class="text-center">Failed to load series.</p>';
+            });
+        }
+
+        function displaySeries(seriesList) {
+            const grid = document.getElementById('seriesGrid');
+            if (!seriesList.length) {
+                grid.innerHTML = '<p class="text-center">No series yet. Create one!</p>';
+                return;
+            }
+            grid.innerHTML = seriesList.map(s => `
+                <div class="col-6 col-md-3 col-lg-2">
+                    <div class="series-card" onclick="window.location.href='series-detail.html?id=${s.id}'">
+                        <img class="series-poster" src="${s.poster || 'https://via.placeholder.com/200x300'}" alt="poster">
+                        <div class="series-title">${s.title}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        loadSeries();
+    </script>
+</body>
+</html>
