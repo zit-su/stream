@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Uploads - Streamify</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container-fluid">
+            <a href="index.html" class="brand"><i class="bi bi-play-circle"></i> Streamify</a>
+            <div class="nav-links">
+                <a href="index.html">Home</a>
+                <a href="series.html">Series</a>
+                <a href="my-uploads.html" class="active">My Uploads</a>
+            </div>
+            <div id="authButtons"></div>
+        </div>
+    </nav>
+
+    <div style="max-width:800px; margin:2rem auto; padding:0 1rem;">
+        <!-- Upload form -->
+        <div class="form-container" id="uploadFormContainer">
+            <h3 style="margin-bottom:1.5rem;"><i class="bi bi-cloud-upload"></i> Upload Video</h3>
+            <div class="upload-area" id="dropZone">
+                <i class="bi bi-camera-video"></i>
+                <p>Drag & drop or <strong>click to browse</strong></p>
+                <small class="text-secondary">MP4, WebM (max 50MB)</small>
+            </div>
+            <input type="file" id="videoFile" accept="video/*" style="display:none;">
+            <img id="thumbnailPreview" class="thumbnail-preview" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; margin-top:1rem; display:none;">
+            <div class="form-group mt-3">
+                <label class="form-label">Title</label>
+                <input type="text" class="form-control" id="videoTitle" placeholder="Video title">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description (optional)</label>
+                <textarea class="form-control" id="videoDescription" rows="2"></textarea>
+            </div>
+            <button class="btn btn-primary w-100" id="uploadSubmitBtn"><i class="bi bi-upload"></i> Upload</button>
+            <div class="progress hidden" id="uploadProgress">
+                <div class="progress-bar" id="progressBar" style="width:0%"></div>
+            </div>
+            <p id="uploadStatus" class="mt-2" style="font-size:0.9rem;"></p>
+        </div>
+
+        <!-- Current uploads list -->
+        <h3 class="mt-4 mb-3">Your Uploaded Content</h3>
+        <div class="my-uploads-list" id="myUploadsList">
+            <p class="text-center">Loading...</p>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script>
+        const firebaseConfig = { /* same as above */ };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        let currentUser = null;
+        auth.onAuthStateChanged(user => {
+            if (!user) window.location.href = 'login.html';
+            currentUser = user;
+            loadMyUploads();
+            // set auth buttons
+            document.getElementById('authButtons').innerHTML = `<button class="btn btn-outline" id="logoutBtn">Sign Out</button>`;
+            document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
+        });
+
+        // Drag & Drop
+        const dropZone = document.getElementById('dropZone');
+        dropZone.addEventListener('click', () => document.getElementById('videoFile').click());
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('video/')) handleFile(file);
+        });
+        document.getElementById('videoFile').addEventListener('change', e => {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            // Preview thumbnail
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.src = URL.createObjectURL(file);
+            video.onloadeddata = () => {
+                video.currentTime = 1;
+            };
+            video.onseeked = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 320; canvas.height = 180;
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                const thumbImg = document.getElementById('thumbnailPreview');
+                thumbImg.src = canvas.toDataURL('image/jpeg', 0.7);
+                thumbImg.style.display = 'block';
+            };
+        }
+
+        // Upload using XMLHttpRequest for progress
+        document.getElementById('uploadSubmitBtn').addEventListener('click', () => {
+            const file = document.getElementById('videoFile').files[0];
+            if (!file) return alert('Choose a video file');
+            const title = document.getElementById('videoTitle').value.trim();
+            if (!title) return alert('Please add a title');
+            if (file.size > 50*1024*1024) return alert('File too large (max 50MB)');
+
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressBar = document.getElementById('progressBar');
+            const statusP = document.getElementById('uploadStatus');
+            progressDiv.classList.remove('hidden');
+            statusP.textContent = 'Uploading...';
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('title', title);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://sunnymavale-app.hf.space/upload');
+            xhr.upload.addEventListener('progress', e => {
+                if (e.lengthComputable) {
+                    const percent = (e.loaded / e.total) * 100;
+                    progressBar.style.width = percent + '%';
+                    statusP.textContent = `Uploading: ${Math.round(percent)}%`;
+                }
+            });
+            xhr.onload = async () => {
+                if (xhr.status === 200) {
+                    const resp = JSON.parse(xhr.responseText);
+                    const videoUrl = `https://sunnymavale-app.hf.space/videos/${resp.filename}`;
+                    // Save to database
+                    const ref = db.ref('videos').push();
+                    await ref.set({
+                        title,
+                        description: document.getElementById('videoDescription').value.trim(),
+                        url: videoUrl,
+                        thumbnail: document.getElementById('thumbnailPreview').src || 'https://via.placeholder.com/320x180',
+                        channel: currentUser.email.split('@')[0],
+                        uploaderId: currentUser.uid,
+                        views: 0,
+                        likes: 0,
+                        timestamp: Date.now()
+                    });
+                    statusP.textContent = 'Upload complete!';
+                    progressDiv.classList.add('hidden');
+                    document.getElementById('videoFile').value = '';
+                    document.getElementById('videoTitle').value = '';
+                    document.getElementById('videoDescription').value = '';
+                    document.getElementById('thumbnailPreview').style.display = 'none';
+                    loadMyUploads();
+                } else {
+                    statusP.textContent = 'Upload failed: ' + xhr.responseText;
+                }
+            };
+            xhr.onerror = () => statusP.textContent = 'Network error';
+            xhr.send(formData);
+        });
+
+        function loadMyUploads() {
+            if (!currentUser) return;
+            const listDiv = document.getElementById('myUploadsList');
+            db.ref('videos').orderByChild('uploaderId').equalTo(currentUser.uid).once('value')
+            .then(snap => {
+                const videos = [];
+                snap.forEach(child => videos.push({ id: child.key, ...child.val() }));
+                videos.sort((a,b) => (b.timestamp||0) - (a.timestamp||0));
+                if (!videos.length) {
+                    listDiv.innerHTML = '<p class="text-center">You haven\'t uploaded any videos yet.</p>';
+                    return;
+                }
+                listDiv.innerHTML = videos.map(v => `
+                    <div class="upload-item">
+                        <div class="item-title">${v.title || 'Untitled'}</div>
+                        <div class="item-meta">${v.views || 0} views</div>
+                        <a href="watch.html?id=${v.id}" class="btn btn-outline btn-sm mt-2">Watch</a>
+                    </div>
+                `).join('');
+            });
+        }
+    </script>
+</body>
+</html>
