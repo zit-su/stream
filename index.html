@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Streamify - Home</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="brand"><i class="bi bi-play-circle"></i> Streamify</a>
+            <button class="hamburger" id="menuToggle"><i class="bi bi-list"></i></button>
+            <div class="nav-links" id="navMenu">
+                <a href="index.html" class="active">Home</a>
+                <a href="my-uploads.html">Upload</a>
+            </div>
+            <div class="auth-area" id="authButtons">
+                <a href="login.html" class="btn btn-outline btn-sm">Sign In</a>
+            </div>
+        </div>
+    </nav>
+
+    <div style="max-width:1400px; margin:0 auto; padding:0 0.5rem;">
+        <div class="video-grid" id="videoGrid"></div>
+    </div>
+
+    <div class="bottom-nav">
+        <a href="index.html" class="active"><i class="bi bi-house-door-fill"></i><span>Home</span></a>
+        <a href="my-uploads.html"><i class="bi bi-plus-circle"></i><span>Upload</span></a>
+        <a href="login.html"><i class="bi bi-person-circle"></i><span>Sign In</span></a>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAPNK7PEPK90SMSQDCSne3wBr1OYoAXxM",
+            authDomain: "store-data-for-sms.firebaseapp.com",
+            databaseURL: "https://store-data-for-sms-default-rtdb.firebaseio.com",
+            projectId: "store-data-for-sms",
+            storageBucket: "store-data-for-sms.firebasestorage.app",
+            messagingSenderId: "508840668923",
+            appId: "1:508840668923:web:0e1e9ebc788bdf1e74ca5e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // Hamburger menu
+        document.getElementById('menuToggle').addEventListener('click', () => {
+            document.getElementById('navMenu').classList.toggle('open');
+        });
+
+        const authDiv = document.getElementById('authButtons');
+        const bottomProfile = document.querySelector('.bottom-nav a[href="login.html"]');
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                authDiv.innerHTML = `<span>${user.email.split('@')[0]}</span>
+                    <button class="btn btn-outline btn-sm" id="logoutBtn">Logout</button>`;
+                document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
+                if (bottomProfile) {
+                    bottomProfile.innerHTML = '<i class="bi bi-person-check-fill"></i><span>Profile</span>';
+                    bottomProfile.href = 'my-uploads.html';
+                }
+            } else {
+                authDiv.innerHTML = '<a href="login.html" class="btn btn-outline btn-sm">Sign In</a>';
+                if (bottomProfile) {
+                    bottomProfile.innerHTML = '<i class="bi bi-person-circle"></i><span>Sign In</span>';
+                    bottomProfile.href = 'login.html';
+                }
+            }
+        });
+
+        function loadVideos() {
+            db.ref('videos').once('value').then(snap => {
+                const videos = [];
+                snap.forEach(child => videos.push({ id: child.key, ...child.val() }));
+                videos.sort((a,b) => (b.timestamp||0) - (a.timestamp||0));
+                displayVideos(videos);
+            }).catch(err => {
+                console.error(err);
+                document.getElementById('videoGrid').innerHTML = '<p class="text-center mt-4">Failed to load videos.</p>';
+            });
+        }
+
+        function displayVideos(videos) {
+            const grid = document.getElementById('videoGrid');
+            if (!videos.length) {
+                grid.innerHTML = '<p class="text-center mt-4" style="width:100%;">No videos yet.</p>';
+                return;
+            }
+            grid.innerHTML = videos.map(v => `
+                <div class="video-card" onclick="window.location.href='watch.html?id=${v.id}'">
+                    <img class="thumb" src="${v.thumbnail || 'https://via.placeholder.com/320x180'}" alt="${v.title}">
+                    <div class="card-body">
+                        <div class="card-title">${v.title || 'Untitled'}</div>
+                        <div class="card-meta">
+                            <span>${v.channel || 'Unknown'}</span>
+                            <span>•</span>
+                            <span>${v.views || 0} views</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // No search filter here – we removed it to ensure all videos always appear.
+        // If you want search, we can add it back but without hiding elements, just a filter.
+        // For now, all videos are shown.
+
+        loadVideos();
+    </script>
+</body>
+</html>
