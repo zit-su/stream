@@ -25,6 +25,7 @@
         .comment-input { background: #272727; border: 1px solid #333; color: white; border-radius: 8px; padding: 10px; width: 100%; margin-bottom: 10px; }
         .btn-comment { background: #065fd4; border: none; color: white; padding: 10px 20px; border-radius: 20px; }
         .loading { text-align: center; padding: 50px; }
+        .error-box { background: #2a0000; color: #ff8888; padding: 15px; border-radius: 12px; margin: 20px; }
     </style>
 </head>
 <body>
@@ -68,16 +69,38 @@
 
         async function loadVideo() {
             if (!videoId) { window.location.href = 'index.html'; return; }
+            const videoContent = document.getElementById('videoContent');
+
             try {
                 let snapshot;
-                let videoData;
                 if (type === 'episode') {
                     snapshot = await db.ref('episodes/' + videoId).once('value');
                 } else {
                     snapshot = await db.ref('videos/' + videoId).once('value');
                 }
-                if (!snapshot.exists()) { alert('Video not found'); window.location.href = 'index.html'; return; }
-                videoData = snapshot.val();
+
+                if (!snapshot.exists()) {
+                    videoContent.innerHTML = '<div class="error-box">Video not found in database. It may have been deleted.</div>';
+                    return;
+                }
+
+                const rawData = snapshot.val();
+                // Normalize to a common video object
+                const video = {
+                    url: rawData.videoUrl || rawData.url || null,
+                    title: rawData.title || 'Untitled',
+                    description: rawData.description || '',
+                    views: rawData.views || 0,
+                    likes: rawData.likes || 0,
+                    channel: rawData.channel || (type === 'episode' ? 'Series Episode' : 'Unknown'),
+                    channelIcon: rawData.channelIcon || (type === 'episode' ? 'E' : 'U'),
+                    uploaderId: rawData.uploaderId || null
+                };
+
+                if (!video.url) {
+                    videoContent.innerHTML = '<div class="error-box">Video URL missing from database record.</div>';
+                    return;
+                }
 
                 // Increment views
                 if (type === 'episode') {
@@ -86,37 +109,24 @@
                     db.ref('videos/' + videoId + '/views').transaction(current => (current || 0) + 1);
                 }
 
-                // For episodes, build a compatible video object for display
-                let displayVideo = {
-                    url: videoData.videoUrl,
-                    title: videoData.title,
-                    description: videoData.description,
-                    views: videoData.views || 0,
-                    likes: videoData.likes || 0,
-                    channel: 'Series Episode',
-                    channelIcon: 'S',
-                    uploaderId: null
-                };
-                if (type !== 'episode') {
-                    displayVideo = videoData;
-                } else {
-                    // For episodes, we might not have channel info, so just use placeholder
-                    displayVideo.channelIcon = 'E';
-                }
-                displayVideo(displayVideo);
+                displayVideo(video);
                 loadComments();
             } catch (error) {
                 console.error('Error loading video:', error);
-                document.getElementById('videoContent').innerHTML = '<div class="text-center p-5"><h3>Error loading video</h3></div>';
+                videoContent.innerHTML = `<div class="error-box">
+                    <strong>Error loading video:</strong> ${error.message}<br>
+                    <small>Check the browser console (F12) for details.</small>
+                </div>`;
             }
         }
 
         function displayVideo(video) {
             const content = document.getElementById('videoContent');
             const channelLink = video.uploaderId ? `channel.html?uid=${video.uploaderId}` : '#';
+
             content.innerHTML = `
-                <video controls autoplay>
-                    <source src="${video.url}" type="video/mp4">
+                <video controls autoplay crossorigin="anonymous">
+                    <source src="${encodeURI(video.url)}" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
                 <div class="video-details">
@@ -158,6 +168,15 @@
 
             const liked = localStorage.getItem(`liked_${videoId}`);
             if (liked) document.getElementById('likeBtn').classList.add('liked');
+
+            // Add error listener for the video element
+            const videoEl = content.querySelector('video');
+            if (videoEl) {
+                videoEl.addEventListener('error', () => {
+                    alert('Video playback failed. Possible reasons:\n- Unsupported format\n- Server not responding\n- Incorrect URL');
+                    console.error('Video element error:', videoEl.error);
+                });
+            }
         }
 
         function signInPrompt() {
@@ -227,9 +246,8 @@
             const text = input.value.trim();
             if (!text) return;
             if (!currentUser) { alert('Please sign in first'); return; }
-
             db.ref('comments').push({
-                videoId: videoId,  // note: for episodes, we still use videoId (which is the episode ID)
+                videoId: videoId,
                 author: currentUser.email.split('@')[0],
                 text: text,
                 timestamp: Date.now()
