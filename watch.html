@@ -2,75 +2,45 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watch Video - YouTube Clone</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Watch - Streamify</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <style>
-        body { background: #0f0f0f; color: white; margin: 0; padding: 0; }
-        .video-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        video { width: 100%; max-height: 70vh; background: #000; border-radius: 12px; }
-        .video-details { padding: 20px 0; }
-        .video-title { font-size: 20px; font-weight: 600; }
-        .video-actions { display: flex; gap: 20px; margin: 20px 0; }
-        .action-btn { background: #272727; border: none; color: white; padding: 10px 20px; border-radius: 20px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.2s; }
-        .action-btn:hover { background: #333; }
-        .action-btn.liked { color: #065fd4; }
-        .channel-section { display: flex; align-items: center; gap: 15px; padding: 15px 0; border-top: 1px solid #333; border-bottom: 1px solid #333; }
-        .channel-icon-link { width: 40px; height: 40px; border-radius: 50%; background: #4caf50; display: flex; align-items: center; justify-content: center; font-weight: bold; text-decoration: none; color: white; }
-        .description-box { background: #272727; border-radius: 12px; padding: 15px; margin-top: 15px; }
-        .comments-section { margin-top: 30px; }
-        .comment { background: #1a1a1a; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-        .comment small { color: #aaa; }
-        .comment-input { background: #272727; border: 1px solid #333; color: white; border-radius: 8px; padding: 10px; width: 100%; margin-bottom: 10px; }
-        .btn-comment { background: #065fd4; border: none; color: white; padding: 10px 20px; border-radius: 20px; }
-        .loading { text-align: center; padding: 50px; }
-        .error-box { background: #2a0000; color: #ff8888; padding: 15px; border-radius: 12px; margin: 20px; }
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <nav class="navbar" style="background: #0f0f0f; border-bottom: 1px solid #333;">
-        <div class="container-fluid">
-            <a href="index.html" class="navbar-brand text-white"><i class="bi bi-youtube text-danger" style="font-size: 28px;"></i> YouTube Clone</a>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="brand"><i class="bi bi-play-circle"></i> Streamify</a>
+            <a href="index.html" class="btn btn-outline btn-sm">← Back</a>
         </div>
     </nav>
 
-    <div class="video-container" id="videoContent">
-        <div class="loading"><div class="spinner-border text-danger"></div></div>
+    <div id="videoContent"></div>
+
+    <div class="bottom-nav">
+        <a href="index.html"><i class="bi bi-house-door"></i><span>Home</span></a>
+        <a href="my-uploads.html"><i class="bi bi-plus-circle"></i><span>Upload</span></a>
+        <a href="login.html"><i class="bi bi-person-circle"></i><span>Sign In</span></a>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyAAPNK7PEPK90SMSQDCSne3wBr1OYoAXxM",
-            authDomain: "store-data-for-sms.firebaseapp.com",
-            databaseURL: "https://store-data-for-sms-default-rtdb.firebaseio.com",
-            projectId: "store-data-for-sms",
-            storageBucket: "store-data-for-sms.firebasestorage.app",
-            messagingSenderId: "508840668923",
-            appId: "1:508840668923:web:0e1e9ebc788bdf1e74ca5e"
-        };
+        const firebaseConfig = { /* same */ };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const auth = firebase.auth();
-
         const urlParams = new URLSearchParams(window.location.search);
         const videoId = urlParams.get('id');
-        const type = urlParams.get('type'); // "episode" for series episodes
+        const type = urlParams.get('type');
         let currentUser = null;
 
-        auth.onAuthStateChanged((user) => {
-            currentUser = user;
-            loadVideo();
-        });
+        auth.onAuthStateChanged(user => { currentUser = user; loadVideo(); });
 
         async function loadVideo() {
-            if (!videoId) { window.location.href = 'index.html'; return; }
-            const videoContent = document.getElementById('videoContent');
-
+            if (!videoId) return window.location.href = 'index.html';
+            const content = document.getElementById('videoContent');
             try {
                 let snapshot;
                 if (type === 'episode') {
@@ -78,166 +48,107 @@
                 } else {
                     snapshot = await db.ref('videos/' + videoId).once('value');
                 }
-
                 if (!snapshot.exists()) {
-                    videoContent.innerHTML = '<div class="error-box">Video not found in database. It may have been deleted.</div>';
+                    content.innerHTML = '<p class="text-center mt-4">Video not found.</p>';
                     return;
                 }
-
-                const rawData = snapshot.val();
-                // Normalize to a common video object
+                const data = snapshot.val();
                 const video = {
-                    url: rawData.videoUrl || rawData.url || null,
-                    title: rawData.title || 'Untitled',
-                    description: rawData.description || '',
-                    views: rawData.views || 0,
-                    likes: rawData.likes || 0,
-                    channel: rawData.channel || (type === 'episode' ? 'Series Episode' : 'Unknown'),
-                    channelIcon: rawData.channelIcon || (type === 'episode' ? 'E' : 'U'),
-                    uploaderId: rawData.uploaderId || null
+                    url: data.videoUrl || data.url,
+                    title: data.title || 'Untitled',
+                    description: data.description || '',
+                    views: data.views || 0,
+                    likes: data.likes || 0,
+                    channel: data.channel || (type === 'episode' ? 'Series Episode' : 'Unknown'),
+                    channelIcon: data.channelIcon || 'U',
+                    uploaderId: data.uploaderId || null
                 };
-
-                if (!video.url) {
-                    videoContent.innerHTML = '<div class="error-box">Video URL missing from database record.</div>';
-                    return;
-                }
+                if (!video.url) { content.innerHTML = '<p class="text-center mt-4">Video URL missing.</p>'; return; }
 
                 // Increment views
-                if (type === 'episode') {
-                    db.ref('episodes/' + videoId + '/views').transaction(current => (current || 0) + 1);
-                } else {
-                    db.ref('videos/' + videoId + '/views').transaction(current => (current || 0) + 1);
-                }
+                const refPath = type === 'episode' ? 'episodes/' + videoId + '/views' : 'videos/' + videoId + '/views';
+                db.ref(refPath).transaction(cur => (cur || 0) + 1);
 
-                displayVideo(video);
+                content.innerHTML = `
+                    <video class="video-player" controls autoplay>
+                        <source src="${encodeURI(video.url)}" type="video/mp4">
+                    </video>
+                    <div class="video-details">
+                        <h2 style="font-size:1.3rem; margin-bottom:0.5rem;">${video.title}</h2>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:1rem;">
+                            <span style="color:var(--text-secondary);">${video.views} views</span>
+                            <div style="display:flex; gap:0.8rem;">
+                                <button class="btn btn-outline btn-sm" id="likeBtn"><i class="bi bi-hand-thumbs-up"></i> <span id="likeCount">${video.likes}</span></button>
+                                <button class="btn btn-outline btn-sm" onclick="shareVideo()"><i class="bi bi-share"></i></button>
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:1rem; padding:0.8rem 0; border-top:1px solid var(--border-color); border-bottom:1px solid var(--border-color);">
+                            <div style="background:var(--accent); width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">${video.channelIcon}</div>
+                            <div>
+                                <strong>${video.channel}</strong>
+                                <div style="font-size:0.8rem; color:var(--text-secondary);">0 subscribers</div>
+                            </div>
+                        </div>
+                        <p style="margin-top:1rem; background:var(--bg-card); padding:0.8rem; border-radius:var(--radius);">${video.description}</p>
+                    </div>
+                    <div style="padding:0 1rem; margin-top:2rem;">
+                        <h4>Comments</h4>
+                        ${currentUser ? `
+                            <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+                                <input type="text" class="form-control" id="commentInput" placeholder="Add a comment...">
+                                <button class="btn btn-primary btn-sm" onclick="postComment()">Post</button>
+                            </div>
+                        ` : '<p><a href="login.html">Sign in</a> to comment.</p>'}
+                        <div id="commentsList"></div>
+                    </div>
+                `;
+
+                // Like button
+                const liked = localStorage.getItem(`liked_${videoId}`);
+                if (liked) document.getElementById('likeBtn').classList.add('active');
+                document.getElementById('likeBtn').addEventListener('click', toggleLike);
                 loadComments();
-            } catch (error) {
-                console.error('Error loading video:', error);
-                videoContent.innerHTML = `<div class="error-box">
-                    <strong>Error loading video:</strong> ${error.message}<br>
-                    <small>Check the browser console (F12) for details.</small>
-                </div>`;
+            } catch (e) {
+                content.innerHTML = `<p class="text-center mt-4">Error: ${e.message}</p>`;
             }
-        }
-
-        function displayVideo(video) {
-            const content = document.getElementById('videoContent');
-            const channelLink = video.uploaderId ? `channel.html?uid=${video.uploaderId}` : '#';
-
-            content.innerHTML = `
-                <video controls autoplay crossorigin="anonymous">
-                    <source src="${encodeURI(video.url)}" type="video/mp4">
-                    Your browser does not support the video tag.
-                </video>
-                <div class="video-details">
-                    <h1 class="video-title">${video.title || 'Untitled'}</h1>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="text-muted">${video.views || 0} views</span>
-                        <div class="video-actions">
-                            <button class="action-btn" id="likeBtn" onclick="toggleLike()">
-                                <i class="bi bi-hand-thumbs-up"></i>
-                                <span id="likeCount">${video.likes || 0}</span>
-                            </button>
-                            <button class="action-btn" onclick="shareVideo()">
-                                <i class="bi bi-share"></i> Share
-                            </button>
-                        </div>
-                    </div>
-                    <div class="channel-section">
-                        <a href="${channelLink}" class="channel-icon-link">${video.channelIcon || 'U'}</a>
-                        <div>
-                            <a href="${channelLink}" style="color: white; text-decoration: none;"><strong>${video.channel || 'Anonymous'}</strong></a>
-                            <br><small class="text-muted">0 subscribers</small>
-                        </div>
-                    </div>
-                    <div class="description-box"><p>${video.description || 'No description'}</p></div>
-                </div>
-
-                <!-- Comments Section -->
-                <div class="comments-section">
-                    <h5>Comments</h5>
-                    ${currentUser ? `
-                        <div class="d-flex gap-2">
-                            <input type="text" class="comment-input" id="commentInput" placeholder="Add a comment...">
-                            <button class="btn-comment" onclick="postComment()">Post</button>
-                        </div>
-                    ` : `<p><a href="#" onclick="signInPrompt()">Sign in</a> to comment.</p>`}
-                    <div id="commentsList"></div>
-                </div>
-            `;
-
-            const liked = localStorage.getItem(`liked_${videoId}`);
-            if (liked) document.getElementById('likeBtn').classList.add('liked');
-
-            // Add error listener for the video element
-            const videoEl = content.querySelector('video');
-            if (videoEl) {
-                videoEl.addEventListener('error', () => {
-                    alert('Video playback failed. Possible reasons:\n- Unsupported format\n- Server not responding\n- Incorrect URL');
-                    console.error('Video element error:', videoEl.error);
-                });
-            }
-        }
-
-        function signInPrompt() {
-            const email = prompt('Email:');
-            if (!email) return;
-            const password = prompt('Password:');
-            if (!password) return;
-            auth.signInWithEmailAndPassword(email, password)
-                .catch(error => {
-                    if (error.code === 'auth/user-not-found') {
-                        if (confirm('Create new account?')) {
-                            auth.createUserWithEmailAndPassword(email, password)
-                                .catch(err => alert(err.message));
-                        }
-                    } else {
-                        alert(error.message);
-                    }
-                });
         }
 
         function toggleLike() {
-            const likeBtn = document.getElementById('likeBtn');
+            const btn = document.getElementById('likeBtn');
             const liked = localStorage.getItem(`liked_${videoId}`);
             const refPath = type === 'episode' ? 'episodes/' + videoId + '/likes' : 'videos/' + videoId + '/likes';
             if (liked) {
                 localStorage.removeItem(`liked_${videoId}`);
-                likeBtn.classList.remove('liked');
-                db.ref(refPath).transaction(current => (current || 1) - 1);
+                btn.classList.remove('active');
+                db.ref(refPath).transaction(cur => (cur || 1) - 1);
                 document.getElementById('likeCount').textContent = Math.max(0, parseInt(document.getElementById('likeCount').textContent) - 1);
             } else {
                 localStorage.setItem(`liked_${videoId}`, 'true');
-                likeBtn.classList.add('liked');
-                db.ref(refPath).transaction(current => (current || 0) + 1);
+                btn.classList.add('active');
+                db.ref(refPath).transaction(cur => (cur || 0) + 1);
                 document.getElementById('likeCount').textContent = parseInt(document.getElementById('likeCount').textContent) + 1;
             }
         }
 
         function shareVideo() {
             const url = window.location.href;
-            if (navigator.share) {
-                navigator.share({ title: document.querySelector('.video-title')?.textContent || 'Video', url });
-            } else {
-                navigator.clipboard.writeText(url).then(() => alert('Link copied!'));
-            }
+            if (navigator.share) navigator.share({ title: document.querySelector('h2')?.textContent, url });
+            else { navigator.clipboard.writeText(url); alert('Link copied!'); }
         }
 
         function loadComments() {
-            db.ref('comments').orderByChild('videoId').equalTo(videoId).on('value', (snapshot) => {
-                const commentsList = document.getElementById('commentsList');
-                if (!commentsList) return;
+            db.ref('comments').orderByChild('videoId').equalTo(videoId).on('value', snap => {
+                const list = document.getElementById('commentsList');
+                if (!list) return;
                 let html = '';
-                snapshot.forEach(child => {
+                snap.forEach(child => {
                     const c = child.val();
-                    html += `
-                        <div class="comment">
-                            <strong>${c.author}</strong> <small>${getTimeAgo(c.timestamp)}</small>
-                            <p class="mb-0 mt-1">${c.text}</p>
-                        </div>
-                    `;
+                    html += `<div class="comment">
+                        <strong>${c.author}</strong> <small style="color:var(--text-secondary);">${getTimeAgo(c.timestamp)}</small>
+                        <p style="margin-top:0.3rem;">${c.text}</p>
+                    </div>`;
                 });
-                commentsList.innerHTML = html || '<p class="text-muted">No comments yet.</p>';
+                list.innerHTML = html || '<p>No comments yet.</p>';
             });
         }
 
@@ -245,26 +156,23 @@
             const input = document.getElementById('commentInput');
             const text = input.value.trim();
             if (!text) return;
-            if (!currentUser) { alert('Please sign in first'); return; }
+            if (!currentUser) { alert('Sign in first'); return; }
             db.ref('comments').push({
-                videoId: videoId,
+                videoId,
                 author: currentUser.email.split('@')[0],
-                text: text,
+                text,
                 timestamp: Date.now()
-            }).then(() => {
-                input.value = '';
-            }).catch(err => alert('Error: ' + err.message));
+            }).then(() => input.value = '');
         }
 
-        function getTimeAgo(timestamp) {
-            if (!timestamp) return '';
-            const now = Date.now();
-            const seconds = Math.floor((now - timestamp) / 1000);
-            if (seconds < 60) return 'Just now';
-            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-            if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-            return new Date(timestamp).toLocaleDateString();
+        function getTimeAgo(ts) {
+            if (!ts) return '';
+            const s = (Date.now() - ts) / 1000;
+            if (s < 60) return 'Just now';
+            if (s < 3600) return Math.floor(s/60)+'m ago';
+            if (s < 86400) return Math.floor(s/3600)+'h ago';
+            if (s < 604800) return Math.floor(s/86400)+'d ago';
+            return new Date(ts).toLocaleDateString();
         }
     </script>
 </body>
