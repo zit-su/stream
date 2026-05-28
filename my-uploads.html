@@ -41,9 +41,6 @@
                 <textarea class="form-control" id="videoDescription" rows="2"></textarea>
             </div>
             <button class="btn btn-primary w-100" id="uploadSubmitBtn"><i class="bi bi-upload"></i> Upload</button>
-            <div class="progress hidden" id="uploadProgress">
-                <div class="progress-bar" id="progressBar" style="width:0%"></div>
-            </div>
             <p id="uploadStatus" class="mt-2" style="color:var(--accent); font-size:0.9rem;"></p>
         </div>
 
@@ -61,7 +58,15 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script>
-        const firebaseConfig = { /* same config */ };
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAPNK7PEPK90SMSQDCSne3wBr1OYoAXxM",
+            authDomain: "store-data-for-sms.firebaseapp.com",
+            databaseURL: "https://store-data-for-sms-default-rtdb.firebaseio.com",
+            projectId: "store-data-for-sms",
+            storageBucket: "store-data-for-sms.firebasestorage.app",
+            messagingSenderId: "508840668923",
+            appId: "1:508840668923:web:0e1e9ebc788bdf1e74ca5e"
+        };
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.database();
@@ -80,7 +85,7 @@
             document.getElementById('authButtons').innerHTML = `<span>${user.email.split('@')[0]}</span>
                 <button class="btn btn-outline btn-sm" id="logoutBtn">Logout</button>`;
             document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
-            // Update bottom nav
+            // Bottom nav profile
             const bottomProfile = document.querySelector('.bottom-nav a[href="login.html"]');
             if (bottomProfile) {
                 bottomProfile.innerHTML = '<i class="bi bi-person-check-fill"></i><span>Profile</span>';
@@ -89,7 +94,7 @@
             loadMyUploads();
         });
 
-        // Drag & Drop
+        // Drag & Drop / file selection
         const dropZone = document.getElementById('dropZone');
         dropZone.addEventListener('click', () => document.getElementById('videoFile').click());
         dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
@@ -105,6 +110,7 @@
         });
 
         function handleFile(file) {
+            // Show thumbnail preview
             const video = document.createElement('video');
             video.preload = 'metadata';
             video.src = URL.createObjectURL(file);
@@ -119,62 +125,59 @@
             };
         }
 
-        document.getElementById('uploadSubmitBtn').addEventListener('click', () => {
+        document.getElementById('uploadSubmitBtn').addEventListener('click', async () => {
             const file = document.getElementById('videoFile').files[0];
-            if (!file) return alert('Select a video');
+            if (!file) return alert('Please select a video file.');
             const title = document.getElementById('videoTitle').value.trim();
-            if (!title) return alert('Enter a title');
-            if (file.size > 50*1024*1024) return alert('File too large (max 50MB)');
+            if (!title) return alert('Please enter a title.');
+            if (file.size > 50 * 1024 * 1024) return alert('File too large (max 50MB).');
 
-            const progressDiv = document.getElementById('uploadProgress');
-            const progressBar = document.getElementById('progressBar');
             const statusP = document.getElementById('uploadStatus');
-            progressDiv.classList.remove('hidden');
             statusP.textContent = 'Uploading...';
 
             const formData = new FormData();
             formData.append('file', file);
             formData.append('title', title);
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'https://sunnymavale-app.hf.space/upload');
-            xhr.upload.addEventListener('progress', e => {
-                if (e.lengthComputable) {
-                    const pct = (e.loaded / e.total) * 100;
-                    progressBar.style.width = pct + '%';
-                    statusP.textContent = `Uploading: ${Math.round(pct)}%`;
+            try {
+                const response = await fetch('https://sunnymavale-app.hf.space/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error('Upload failed: ' + text.substring(0, 100));
                 }
-            });
-            xhr.onload = async () => {
-                if (xhr.status === 200) {
-                    const resp = JSON.parse(xhr.responseText);
-                    const videoUrl = `https://sunnymavale-app.hf.space/videos/${resp.filename}`;
-                    await db.ref('videos').push({
-                        title,
-                        description: document.getElementById('videoDescription').value.trim(),
-                        url: videoUrl,
-                        thumbnail: document.getElementById('thumbnailPreview').src || 'https://via.placeholder.com/320x180',
-                        channel: currentUser.email.split('@')[0],
-                        channelIcon: currentUser.email.charAt(0).toUpperCase(),
-                        uploaderId: currentUser.uid,
-                        views: 0,
-                        likes: 0,
-                        timestamp: Date.now()
-                    });
-                    statusP.textContent = 'Upload complete!';
-                    progressDiv.classList.add('hidden');
-                    // Reset form
-                    document.getElementById('videoFile').value = '';
-                    document.getElementById('videoTitle').value = '';
-                    document.getElementById('videoDescription').value = '';
-                    document.getElementById('thumbnailPreview').style.display = 'none';
-                    loadMyUploads();
-                } else {
-                    statusP.textContent = 'Upload failed.';
-                }
-            };
-            xhr.onerror = () => statusP.textContent = 'Network error';
-            xhr.send(formData);
+
+                const result = await response.json();
+                const videoUrl = `https://sunnymavale-app.hf.space/videos/${result.filename}`;
+
+                // Save to Firebase
+                await db.ref('videos').push({
+                    title,
+                    description: document.getElementById('videoDescription').value.trim(),
+                    url: videoUrl,
+                    thumbnail: document.getElementById('thumbnailPreview').src || 'https://via.placeholder.com/320x180',
+                    channel: currentUser.email.split('@')[0],
+                    channelIcon: currentUser.email.charAt(0).toUpperCase(),
+                    uploaderId: currentUser.uid,
+                    views: 0,
+                    likes: 0,
+                    timestamp: Date.now()
+                });
+
+                statusP.textContent = 'Upload successful!';
+                // Clear form
+                document.getElementById('videoFile').value = '';
+                document.getElementById('videoTitle').value = '';
+                document.getElementById('videoDescription').value = '';
+                document.getElementById('thumbnailPreview').style.display = 'none';
+                loadMyUploads();
+            } catch (error) {
+                console.error(error);
+                statusP.textContent = 'Error: ' + error.message;
+            }
         });
 
         function loadMyUploads() {
