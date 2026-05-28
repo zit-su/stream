@@ -35,29 +35,42 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script>
-        const firebaseConfig = { /* same */ };
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAPNK7PEPK90SMSQDCSne3wBr1OYoAXxM",
+            authDomain: "store-data-for-sms.firebaseapp.com",
+            databaseURL: "https://store-data-for-sms-default-rtdb.firebaseio.com",
+            projectId: "store-data-for-sms",
+            storageBucket: "store-data-for-sms.firebasestorage.app",
+            messagingSenderId: "508840668923",
+            appId: "1:508840668923:web:0e1e9ebc788bdf1e74ca5e"
+        };
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
 
         let isLogin = true;
-        document.getElementById('loginTab').addEventListener('click', () => {
+        const loginTab = document.getElementById('loginTab');
+        const registerTab = document.getElementById('registerTab');
+        const submitBtn = document.getElementById('submitBtn');
+
+        loginTab.addEventListener('click', () => {
             isLogin = true;
-            document.getElementById('loginTab').classList.add('active');
-            document.getElementById('registerTab').classList.remove('active');
-            document.getElementById('submitBtn').textContent = 'Sign In';
+            loginTab.classList.add('active');
+            registerTab.classList.remove('active');
+            submitBtn.textContent = 'Sign In';
         });
-        document.getElementById('registerTab').addEventListener('click', () => {
+        registerTab.addEventListener('click', () => {
             isLogin = false;
-            document.getElementById('registerTab').classList.add('active');
-            document.getElementById('loginTab').classList.remove('active');
-            document.getElementById('submitBtn').textContent = 'Create Account';
+            registerTab.classList.add('active');
+            loginTab.classList.remove('active');
+            submitBtn.textContent = 'Create Account';
         });
 
         document.getElementById('authForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value.trim();
-            document.getElementById('errorMsg').textContent = '';
+            const errorEl = document.getElementById('errorMsg');
+            errorEl.textContent = '';
             try {
                 if (isLogin) {
                     await auth.signInWithEmailAndPassword(email, password);
@@ -66,7 +79,7 @@
                 }
                 window.location.href = 'index.html';
             } catch (error) {
-                document.getElementById('errorMsg').textContent = error.message;
+                errorEl.textContent = error.message;
             }
         });
     </script>
